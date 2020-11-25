@@ -1,6 +1,6 @@
 ---
 title: "pomoc_titanic"
-author: "Stanisław Wysocki"
+author: ""
 date: "13 listopada 2020"
 output: html_document
 ---
@@ -127,18 +127,8 @@ rfFitTune <- train(Fare ~ .,
              metric = "RMSE"
             )
 
-# ridgeFitTune <- train(Fare ~ .,
-#              data = training_data2,
-#              method = "ridge",
-#              trControl = gridCtrl_2,
-#              na.action = na.omit,
-#              metric = "RMSE"
-#             )
-
 x_nn <- training_data2[,c("Age","Pclass","is_male","is_female")]
 y_nn <- training_data2[,c("Fare")]
-# 
-# nn_net = RSNNS::mlp(x_nn, y_nn, size = c(10, 20 , 10), linOut = TRUE, maxit = 100, learnFuncParams = c(0.002, 0))
 
 brnn=brnn::brnn(Fare ~ ., data = training_data2, neurons=4)
 
@@ -178,8 +168,6 @@ RMSE <- sqrt(mean((brnnFare - training_data2$Fare)^2))
 sprintf("brnn RMSE: %f",RMSE)
 RMSE <- sqrt(mean((mxFare - training_data2$Fare)^2))
 sprintf("qrnn RMSE: %f",RMSE)
-# RMSE <- sqrt(mean((nnFare - training_data2$Fare)^2))
-# sprintf("nn RMSE: %f",RMSE)
 RMSE <- sqrt(mean((cartFare - training_data2$Fare)^2))
 sprintf("cart RMSE: %f",RMSE)
 RMSE <- sqrt(mean((rfFare - training_data2$Fare)^2))
