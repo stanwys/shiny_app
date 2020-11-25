@@ -1,0 +1,215 @@
+---
+title: "pomoc_titanic"
+author: "Stanisław Wysocki"
+date: "13 listopada 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(modeldata)
+```
+
+```{r cars}
+
+titanic_data <- read.csv(file = "titanic.csv")
+
+#surived> - płeć(Sex), wiek(Age) i klasa biletu(Pclass)
+
+#classification with probs
+training_data1 <- titanic_data[,c("Survived","Sex","Age","Pclass")]
+training_data1[,'Survived']<-factor(training_data1[,'Survived'])
+training_data1[,'Survived']<-make.names(training_data1[,'Survived'])
+
+#regression FOR NNET
+is_male <- c()
+is_female <- c()
+for (i in seq_along(titanic_data[,"Sex"])){
+    if (as.character(titanic_data$Sex[i])=="male"){
+      is_male <- c(is_male, 1)
+      is_female <- c(is_female, 0)
+    } 
+    else{
+      is_male <- c(is_male, 0)
+      is_female <- c(is_female, 1)
+    }
+}
+
+
+training_data2 <- titanic_data[,c("Fare","Age","Pclass")]
+training_data2$is_male <- is_male
+training_data2$is_female <- is_female
+
+#training_data2 <- titanic_data[c("Fare","Pclass")]
+training_data2 <- training_data2[complete.cases(training_data2), ]
+
+```
+
+
+```{r}
+
+gridCtrl <- trainControl(
+    method = "cv",
+    classProbs = TRUE,
+    number = 10)
+
+
+rfFitTune <- train(Survived ~ .,
+             data = training_data1,
+             method = "rf",
+             trControl = gridCtrl,
+             ntree = 20,
+             na.action = na.omit)
+
+Sex <- c("male", "female", "male")
+Age <- c(44, 21 , 34)
+Pclass <- c(3, 2, 1)
+
+testing_data <- data.frame(Sex, Age, Pclass)
+
+rfProbs <- predict(rfFitTune, newdata = testing_data, type="prob")
+rfProbs$X1
+```
+
+```{r}
+
+saveRDS(rfFitTune, "./rf.rds")
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+gridCtrl_2 <- trainControl(
+    method = "none",
+    classProbs = FALSE)
+
+
+# neuralFitTune <- train(Fare ~ .,
+#              data = training_data2,
+#              method = "mlpML",
+#              layer1 = 20,
+#              layer2 = 40,
+#              layer3 = 20,
+#              decay = 0.01,
+#              loop = 10,
+#              #act.fct = "linear",
+#              linear.output = TRUE ,
+#              trControl = gridCtrl_2,
+#              na.action = na.omit,
+#              metric = "RMSE"
+#              )
+
+cartFitTune <-  train(Fare ~ .,
+             data = training_data2,
+             method = "rpart1SE",
+             trControl = gridCtrl_2,
+             na.action = na.omit,
+             metric = "RMSE"
+            )
+
+lmFitTune <- train(Fare ~ .,
+             data = training_data2,
+             method = "lm",
+             trControl = gridCtrl_2,
+             na.action = na.omit,
+             metric = "RMSE"
+            )
+
+
+rfFitTune <- train(Fare ~ .,
+             data = training_data2,
+             method = "rf",
+             ntree = 20,
+             trControl = gridCtrl_2,
+             na.action = na.omit,
+             metric = "RMSE"
+            )
+
+# ridgeFitTune <- train(Fare ~ .,
+#              data = training_data2,
+#              method = "ridge",
+#              trControl = gridCtrl_2,
+#              na.action = na.omit,
+#              metric = "RMSE"
+#             )
+
+x_nn <- training_data2[,c("Age","Pclass","is_male","is_female")]
+y_nn <- training_data2[,c("Fare")]
+# 
+# nn_net = RSNNS::mlp(x_nn, y_nn, size = c(10, 20 , 10), linOut = TRUE, maxit = 100, learnFuncParams = c(0.002, 0))
+
+brnn=brnn::brnn(Fare ~ ., data = training_data2, neurons=4)
+
+pred_qrnn <- qrnn::qrnn.fit(as.matrix(x_nn),as.matrix(y_nn),n.hidden = 6, penalty = 0.01)
+
+
+is_male <- c(1,0,1)
+is_female <- c(0,1,0)
+Age <- c(44, 21 , 34)
+Pclass <- c(3, 2, 1)
+Sex <- c("male", "female", "male")
+
+testing_data <- data.frame(Pclass, Age, is_male, is_female)
+
+#neuralFare <- predict(neuralFitTune, newdata = testing_data)
+
+# lmFare <- predict(lmFitTune, newdata = training_data2)
+brnnFare <- predict(brnn, newdata = training_data2)
+
+# nnFare <- predict(nn_net, x_nn)
+cartFare <- predict(cartFitTune, newdata = training_data2)
+rfFare <- predict(rfFitTune, newdata = training_data2 )
+mxFare <- qrnn::qrnn.predict( as.matrix(x_nn), pred_qrnn)
+
+
+# modell <- readRDS("./brnn.rds")
+# 
+# predictedByModel <- predict(modell, newdata = training_data2)
+
+
+# ggplot() + 
+#   geom_point(mapping = aes(x=seq_along(training_data2$Fare), y=training_data2$Fare, color ="red")) +
+#   geom_point(mapping = aes(x=seq_along(training_data2$Fare), y=brnnFare ))
+
+
+RMSE <- sqrt(mean((brnnFare - training_data2$Fare)^2))
+sprintf("brnn RMSE: %f",RMSE)
+RMSE <- sqrt(mean((mxFare - training_data2$Fare)^2))
+sprintf("qrnn RMSE: %f",RMSE)
+# RMSE <- sqrt(mean((nnFare - training_data2$Fare)^2))
+# sprintf("nn RMSE: %f",RMSE)
+RMSE <- sqrt(mean((cartFare - training_data2$Fare)^2))
+sprintf("cart RMSE: %f",RMSE)
+RMSE <- sqrt(mean((rfFare - training_data2$Fare)^2))
+sprintf("rf RMSE: %f",RMSE)
+
+
+# ggplot(mapping=aes(alpha=0.4)) +
+#  geom_density(aes(cartFare, fill = "predicted")) +
+#  geom_density(aes(training_data2$Fare,  fill = "true")) +
+#  xlab("price") +
+#  theme_minimal()
+
+
+
+
+```
+
+
+```{r}
+
+saveRDS(rfFitTune, "./rfReg.rds")
+
+
+```
+
+```{r}
+cartFitTune$finalModel
+
+rfFitTune$finalModel
+
+
+```
+
